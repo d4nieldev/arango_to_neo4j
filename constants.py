@@ -1,0 +1,23 @@
+# Environment variables names
+ARANGO_HOST = 'ARANGO_HOST'
+ARANGO_USERNAME = 'ARANGO_USERNAME'
+ARANGO_PASSWORD = 'ARANGO_PASSWORD'
+ARANGO_DB_NAME = 'ARANGO_DB_NAME'
+ARANGO_GRAPH_NAME = 'ARANGO_GRAPH_NAME'
+
+
+# Arango constants
+ARANGO_EDGE_DEF_TYPE_PROP = 'edge_collection'
+ARANGO_EDGE_DEF_FROM_TYPE_PROP = 'from_vertex_collections'
+ARANGO_EDGE_DEF_TO_TYPE_PROP = 'to_vertex_collections'
+
+ARANGO_NODE_ID_PROP = '_id'
+
+ARANGO_EDGE_ID_PROP = '_id'
+ARANGO_EDGE_FROM_ID_PROP = '_from'
+ARANGO_EDGE_TO_ID_PROP = '_to'
+
+
+# File system
+PATH_TO_INSTRUCTIONS = 'instructions'
+PATH_TO_GRAPHS_DIR = 'graphs'
