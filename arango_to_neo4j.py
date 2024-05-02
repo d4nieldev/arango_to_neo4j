@@ -1,13 +1,15 @@
 import os
+import json
 import logging as log
-from typing import Callable
 from abc import ABC, abstractmethod
+from threading import Lock
 
 from dotenv import load_dotenv
 from arango import ArangoClient
 from arango.graph import Graph as ArangoGraph
 
 import constants as c
+from utils import read_file, write_file
 
 load_dotenv()
 log.getLogger().setLevel(log.INFO)
@@ -31,36 +33,58 @@ def get_arango_graph() -> ArangoGraph:
 
 
 class ArangoToNeo4j(ABC):
-    def __init__(self, graph_filename: str, ignored_node_types: list[str], ignored_edge_types: list[str]):
-        self.path_to_graph_file: str = os.path.join(c.PATH_TO_GRAPHS_DIR, graph_filename)
-        self.ignored_node_types: list[str] = ignored_node_types
-        self.ignored_edge_types: list[str] = ignored_edge_types
+    def __init__(self, graph_name: str, ignored_node_types: tuple[str, ...] = (), ignored_edge_types: tuple[str, ...] = ()):
+        self.graph_file_path: str = os.path.join(c.GRAPHS_DIR, f'{graph_name}{c.GRAPH_FILE_EXTENSION}')
+        self.instructions_dir_path: str = os.path.join(c.INSTRUCTIONS_DIR, graph_name)
+        self.ignored_node_types: tuple[str, ...] = ignored_node_types
+        self.ignored_edge_types: tuple[str, ...] = ignored_edge_types
 
         self.arango_nodes: dict[str, list[dict]] = dict()
         self.arango_edges: dict[str, list[dict]] = dict()
-        self.__load_graph()
+        self.is_loaded: bool = False
+        self.__lock = Lock()
 
-    def __load_graph(self, from_existing: bool = True) -> None:
-        if from_existing and os.path.exists(self.path_to_graph_file):
-            self.__load_graph_from_existing()
+    def load_graph(self, from_file: bool = True) -> None:
+        """
+        Loads the arango graph into memory
+        :param from_file: Whether to load from existing file (self.graph_file_path)
+        """
+        if from_file and os.path.exists(self.graph_file_path):
+            self.__load_graph_from_file()
         else:
             self.__load_graph_from_host(save_after_load=True)
 
-    def __load_graph_from_existing(self) -> None:
-        # TODO use the same logic as in save_graph_to_file to load from the file
-        pass
+        self.is_loaded = True
 
-    def __load_graph_from_host(self, save_after_load: bool) -> None:
+    def __load_graph_from_file(self) -> None:
         """
-        Loads the arango graph from the host to the memory
-        :param save_after_load: save the graph to a file for faster loading in the future (recommended: True)
+        Loads the arango graph from existing file (self.graph_file_path)
+        :return:
         """
-        arango_graph: ArangoGraph = get_arango_graph()
+        graph_data: dict = read_file(file_path=self.graph_file_path, is_json=True)
 
+        assert c.GRAPH_FILE_NODES_KEY in graph_data and c.GRAPH_FILE_EDGES_KEY in graph_data, \
+            'incorrect graph file format.'
+
+        self.arango_nodes = graph_data[c.GRAPH_FILE_NODES_KEY]
+        self.arango_edges = graph_data[c.GRAPH_FILE_EDGES_KEY]
+
+        log.info(f"Loaded {len(self.arango_nodes)} nodes and {len(self.arango_edges)} edges from {self.graph_file_path}")
+
+    def __load_nodes_from_host(self, arango_graph: ArangoGraph) -> None:
+        """
+        Loads only nodes from the arango host into memory
+        :param arango_graph: The arango graph object
+        """
         for node_type in arango_graph.vertex_collections():
             if node_type not in self.ignored_node_types:
                 self.arango_nodes[node_type] = [arango_node for arango_node in arango_graph.vertex_collection(node_type)]
 
+    def __load_edges_from_host(self, arango_graph: ArangoGraph) -> None:
+        """
+        Loads only edges from the arango host into memory
+        :param arango_graph: The arango graph object
+        """
         for edge_def in arango_graph.edge_definitions():
             edge_type = edge_def[c.ARANGO_EDGE_DEF_TYPE_PROP]
             from_node_type = edge_def[c.ARANGO_EDGE_DEF_FROM_TYPE_PROP]
@@ -70,27 +94,46 @@ class ArangoToNeo4j(ABC):
                     edge_type not in self.ignored_edge_types:
                 self.arango_edges[edge_type] = [arango_edge for arango_edge in arango_graph.edge_collection(edge_type)]
 
+    def __load_graph_from_host(self, save_after_load: bool) -> None:
+        """
+        Loads the arango graph from the host to the memory
+        :param save_after_load: save the graph to a file for faster loading in the future (recommended: True)
+        """
+        arango_graph: ArangoGraph = get_arango_graph()
+
+        self.__load_nodes_from_host(arango_graph=arango_graph)
+        self.__load_edges_from_host(arango_graph=arango_graph)
+
+        log.info(f"Loaded {len(self.arango_nodes)} nodes and {len(self.arango_edges)} edges from host")
+
         if save_after_load:
             self.save_graph_to_file()
 
-    def save_graph_to_file(self):
-        # TODO use the same logic as in __load_graph_from_existing to save to the file
+    def save_graph_to_file(self) -> None:
+        assert self.is_loaded, "graph data must be loaded before saving to file"
+
+        file_data = dict()
+        file_data[c.GRAPH_FILE_NODES_KEY] = self.arango_nodes
+        file_data[c.GRAPH_FILE_EDGES_KEY] = self.arango_edges
+
+        write_file(file_path=self.graph_file_path, data=file_data, is_json=True, create_path_if_not_exist=True)
+
+        log.info(f"Saved {len(self.arango_nodes)} nodes and {len(self.arango_edges)} edges to {self.graph_file_path}")
+
+    def generate_instructions(self) -> None:
+        assert self.is_loaded, "graph data must be loaded before generating instructions"
+        # TODO generate all instructions and write to file (use some kind of CREATE IF NOT EXISTS)
         pass
 
-    def __generate_instructions(self):
-        # TODO generate all instructions (use some kind of CREATE IF NOT EXISTS)
-        pass
-
-    def build_neo4j(self, instructions_file: str):
+    def build_neo4j(self) -> None:
         """
-        Build the Neo4j graph from an instructions file (.cypher)
-        :return:
+        Build the Neo4j graph from the instructions files (.cypher)
         """
         # TODO execute all instructions
         pass
 
     @abstractmethod
-    def arango_node_transformer(self, arango_node: dict) -> dict:
+    def _arango_node_transformer(self, arango_node: dict) -> dict:
         """
         Transforms a given node from the arango db to a dict containing only relevant features.
         DO NOT remove the id field - this field will be used for identifying nodes in the revised edition.
@@ -99,7 +142,7 @@ class ArangoToNeo4j(ABC):
         """
 
     @abstractmethod
-    def arango_edge_transformer(self, arango_edge: dict) -> dict:
+    def _arango_edge_transformer(self, arango_edge: dict) -> dict:
         """
         Transforms a given edge from the arango db to a dict containing only relevant features.
         DO NOT remove the id field - this field will be used for identifying edges in the revised edition.

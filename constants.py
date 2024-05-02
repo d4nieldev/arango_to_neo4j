@@ -19,5 +19,11 @@ ARANGO_EDGE_TO_ID_PROP = '_to'
 
 
 # File system
-PATH_TO_INSTRUCTIONS = 'instructions'
-PATH_TO_GRAPHS_DIR = 'graphs'
+INSTRUCTIONS_DIR = 'instructions'
+GRAPHS_DIR = 'arango_graphs'
+GRAPH_FILE_EXTENSION = '.json'
+
+
+# Graphs file
+GRAPH_FILE_NODES_KEY = 'nodes'
+GRAPH_FILE_EDGES_KEY = 'edges'
