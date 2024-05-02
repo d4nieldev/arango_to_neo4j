@@ -1,6 +1,7 @@
 """
 The methods in this file are transformers for the nodes in the arango BRON graph.
 It is important that the name of the function will be {node_datatype}_trans.
+The methods should NOT override the property _id !!
 """
 
 
