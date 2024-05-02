@@ -15,3 +15,4 @@ class BronArangoToNeo4j(ArangoToNeo4j):
 
 if __name__ == '__main__':
     generator = BronArangoToNeo4j()
+    generator.load_graph(from_file=True, rewrite_file=False)

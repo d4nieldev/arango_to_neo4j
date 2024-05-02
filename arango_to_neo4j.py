@@ -44,17 +44,32 @@ class ArangoToNeo4j(ABC):
         self.is_loaded: bool = False
         self.__lock = Lock()
 
-    def load_graph(self, from_file: bool = True) -> None:
+    def load_graph(self, from_file: bool = True, rewrite_file: bool = False) -> None:
         """
         Loads the arango graph into memory
         :param from_file: Whether to load from existing file (self.graph_file_path)
+        :param rewrite_file: Whether to rewrite the current graph file with the loaded data
         """
         if from_file and os.path.exists(self.graph_file_path):
             self.__load_graph_from_file()
         else:
-            self.__load_graph_from_host(save_after_load=True)
+            self.__load_graph_from_host()
 
         self.is_loaded = True
+        if rewrite_file:
+            self.save_graph_to_file()
+
+    def __nodes_count(self) -> int:
+        count = 0
+        for nodes in self.arango_nodes.values():
+            count += len(nodes)
+        return count
+
+    def __edges_count(self) -> int:
+        count = 0
+        for edges in self.arango_edges.values():
+            count += len(edges)
+        return count
 
     def __load_graph_from_file(self) -> None:
         """
@@ -69,7 +84,19 @@ class ArangoToNeo4j(ABC):
         self.arango_nodes = graph_data[c.GRAPH_FILE_NODES_KEY]
         self.arango_edges = graph_data[c.GRAPH_FILE_EDGES_KEY]
 
-        log.info(f"Loaded {len(self.arango_nodes)} nodes and {len(self.arango_edges)} edges from {self.graph_file_path}")
+        log.info(f"Loaded {self.__nodes_count()} nodes and {self.__edges_count()} edges from {self.graph_file_path}")
+
+    def __load_graph_from_host(self) -> None:
+        """
+        Loads the arango graph from the host to the memory
+        :param save_after_load: save the graph to a file for faster loading in the future (recommended: True)
+        """
+        arango_graph: ArangoGraph = get_arango_graph()
+
+        self.__load_nodes_from_host(arango_graph=arango_graph)
+        self.__load_edges_from_host(arango_graph=arango_graph)
+
+        log.info(f"Loaded {self.__nodes_count()} nodes and {self.__edges_count()} edges from host")
 
     def __load_nodes_from_host(self, arango_graph: ArangoGraph) -> None:
         """
@@ -87,27 +114,12 @@ class ArangoToNeo4j(ABC):
         """
         for edge_def in arango_graph.edge_definitions():
             edge_type = edge_def[c.ARANGO_EDGE_DEF_TYPE_PROP]
-            from_node_type = edge_def[c.ARANGO_EDGE_DEF_FROM_TYPE_PROP]
-            to_node_type = edge_type[c.ARANGO_EDGE_DEF_TO_TYPE_PROP]
-            if from_node_type not in self.ignored_node_types and \
-                    to_node_type not in self.ignored_node_types and \
-                    edge_type not in self.ignored_edge_types:
+            from_node_types = edge_def[c.ARANGO_EDGE_DEF_FROM_TYPE_PROP]
+            to_node_types = edge_def[c.ARANGO_EDGE_DEF_TO_TYPE_PROP]
+            relevant_node_types = set(from_node_types + to_node_types)
+            if (len(relevant_node_types.intersection(set(self.ignored_node_types))) == 0 and
+                    edge_type not in self.ignored_edge_types):
                 self.arango_edges[edge_type] = [arango_edge for arango_edge in arango_graph.edge_collection(edge_type)]
-
-    def __load_graph_from_host(self, save_after_load: bool) -> None:
-        """
-        Loads the arango graph from the host to the memory
-        :param save_after_load: save the graph to a file for faster loading in the future (recommended: True)
-        """
-        arango_graph: ArangoGraph = get_arango_graph()
-
-        self.__load_nodes_from_host(arango_graph=arango_graph)
-        self.__load_edges_from_host(arango_graph=arango_graph)
-
-        log.info(f"Loaded {len(self.arango_nodes)} nodes and {len(self.arango_edges)} edges from host")
-
-        if save_after_load:
-            self.save_graph_to_file()
 
     def save_graph_to_file(self) -> None:
         assert self.is_loaded, "graph data must be loaded before saving to file"
@@ -118,7 +130,7 @@ class ArangoToNeo4j(ABC):
 
         write_file(file_path=self.graph_file_path, data=file_data, is_json=True, create_path_if_not_exist=True)
 
-        log.info(f"Saved {len(self.arango_nodes)} nodes and {len(self.arango_edges)} edges to {self.graph_file_path}")
+        log.info(f"Saved {self.__nodes_count()} nodes and {self.__edges_count()} edges to {self.graph_file_path}")
 
     def generate_instructions(self) -> None:
         assert self.is_loaded, "graph data must be loaded before generating instructions"
