@@ -6,73 +6,73 @@ The methods should NOT override the properties _id, _from, _to !!
 """
 
 
-def TacticTechnique_trans(edge: dict) -> (dict, str):
+def TacticTechnique_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def GroupSoftware_trans(edge: dict) -> (dict, str):
+def GroupSoftware_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def GroupTechnique_trans(edge: dict) -> (dict, str):
+def GroupTechnique_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def SoftwareTechnique_trans(edge: dict) -> (dict, str):
+def SoftwareTechnique_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def TechniqueTechnique_trans(edge: dict) -> (dict, str):
+def TechniqueTechnique_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def TechniqueD3fend_mitigation_trans(edge: dict) -> (dict, str):
+def TechniqueD3fend_mitigation_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def TechniqueTechnique_mitigation_trans(edge: dict) -> (dict, str):
+def TechniqueTechnique_mitigation_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def TechniqueTechnique_detection_trans(edge: dict) -> (dict, str):
+def TechniqueTechnique_detection_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def TechniqueCapec_trans(edge: dict) -> (dict, str):
+def TechniqueCapec_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def CapecCapec_trans(edge: dict) -> (dict, str):
+def CapecCapec_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def CapecCapec_mitigation_trans(edge: dict) -> (dict, str):
+def CapecCapec_mitigation_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def CapecCapec_detection_trans(edge: dict) -> (dict, str):
+def CapecCapec_detection_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def CapecCwe_detection_trans(edge: dict) -> (dict, str):
+def CapecCwe_detection_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def CweCwe_trans(edge: dict) -> (dict, str):
+def CweCwe_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def CweCwe_mitigation_trans(edge: dict) -> (dict, str):
+def CweCwe_mitigation_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def CweCwe_detection_trans(edge: dict) -> (dict, str):
+def CweCwe_detection_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def CweCve_trans(edge: dict) -> (dict, str):
+def CweCve_trans(edge: dict) -> tuple[dict, str]:
     pass
 
 
-def CveCpe_trans(edge: dict) -> (dict, str):
+def CveCpe_trans(edge: dict) -> tuple[dict, str]:
     pass

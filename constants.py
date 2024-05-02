@@ -20,8 +20,11 @@ ARANGO_EDGE_TO_ID_PROP = '_to'
 
 # File system
 INSTRUCTIONS_DIR = 'instructions'
+INSTRUCTIONS_NODES_DIR_NAME = 'nodes'
+INSTRUCTIONS_EDGES_DIR_NAME = 'edges'
 GRAPHS_DIR = 'arango_graphs'
 GRAPH_FILE_EXTENSION = '.json'
+INSTRUCTIONS_FILE_EXTENSION = '.cypher'
 
 
 # Graphs file
