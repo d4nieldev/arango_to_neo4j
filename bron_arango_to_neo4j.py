@@ -71,10 +71,23 @@ class BronArangoToNeo4j(ArangoToNeo4j):
         relevant_node_types_str = ':' + ':'.join(relevant_node_types)
         with get_neo4j_driver() as driver:
             driver.verify_connectivity()
-            nodes, _, _ = driver.execute_query(
-                # f"MATCH (n{relevant_node_types_str}) RETURN n LIMIT 5"
-                "MATCH (n:capec) RETURN n LIMIT 5"
-            )
+            # query to fetch one node from each type to see summary
+            # query = ""
+            # prev_nodes = []
+            # for i, node_type in enumerate(relevant_node_types):
+            #     node_name = f'{node_type}_node'
+            #     prev_nodes.append(node_name)
+            #     prev_node_types_str = ', '.join(prev_nodes)
+            #
+            #     query += f"MATCH ({node_name}:{node_type})\n"
+            #     if i < len(relevant_node_types) - 1:
+            #         query += f"WITH {prev_node_types_str}\n"
+            #     else:
+            #         query += f"RETURN {prev_node_types_str}\n"
+            #     query += f"LIMIT 1\n"
+
+            query = f"MATCH (n{relevant_node_types_str})"
+            nodes, _, _ = driver.execute_query(query_=query)
 
             for node, in nodes:
                 node_type = list(node.labels)[0]
@@ -82,7 +95,7 @@ class BronArangoToNeo4j(ArangoToNeo4j):
                 node_summary_func = getattr(bron_node_summaries, node_type + "_summary")
                 node_summary = node_summary_func(node_data=node_data)
 
-                # TODO: calculate embeddings for the node summary text...
+                # TODO: calculate embeddings for the node summary text
                 pass
 
 

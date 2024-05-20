@@ -8,17 +8,17 @@ from utils import create_markdown_table
 
 def group_summary(node_data: dict) -> str:
     output = f"# MITRE ATT&CK Group \"{node_data['name']}\" ({node_data['original_id']})\n"
-    output += f"## Description\n{node_data['description']}"
+    output += f"## Description\n{node_data['description']}\n"
     if len(node_data['aliases']) > 0:
-        output += f"## Aliases\n{'\n'.join([f'* {a}' for a in node_data['aliases']])}\n"
+        output += f"## Aliases\n{'\n'.join([f'* {a}' for a in node_data['aliases']])}"
 
     return output
 
 
 def software_summary(node_data: dict) -> str:
     output = f"# MITRE ATT&CK Software \"{node_data['name']}\" ({node_data['original_id']})\n"
-    output += f"## Description\n{node_data['description']}"
-    output += f"## Type\n{node_data['software_type']}\n"
+    output += f"## Description\n{node_data['description']}\n"
+    output += f"## Type\n{node_data['software_type']}"
 
     return output
 
@@ -41,7 +41,8 @@ def technique_summary(node_data: dict) -> str:
 def d3fend_mitigation_summary(node_data: dict) -> str:
     output = f"# MITRE D3FEND Mitigation \"{node_data['name']}\" ({node_data['original_id']})\n"
     output += f"## Description\n{node_data['description']}\n"
-    output += f"## Synonyms\n{'\n'.join([f'* {s}' for s in node_data['synonyms']])}"
+    if len(node_data['synonyms']) > 0:
+        output += f"## Synonyms\n{'\n'.join([f'* {s}' for s in node_data['synonyms']])}"
 
     return output
 
@@ -54,7 +55,7 @@ def technique_mitigation_summary(node_data: dict) -> str:
 
 
 def technique_detection_summary(node_data: dict) -> str:
-    technique_str = 'sub-technique' if '.' in node_data['original_id'] else 'technique'
+    technique_str = 'sub-technique' if '.' in node_data['technique_id'] else 'technique'
     output = f"# Detections for {technique_str} {node_data['technique_id']}\n"
     output += node_data['description']
 
@@ -110,7 +111,7 @@ def cwe_summary(node_data: dict) -> str:
         common_consequences_table = create_markdown_table(items=common_consequences)
         output += f"## Common Consequences\n{common_consequences_table}\n"
 
-    if node_data['likelihood_of_exploit	'].strip() != "":
+    if node_data['likelihood_of_exploit'].strip() != "":
         output += f"## Likelihood of Exploit\n{node_data['likelihood_of_exploit']}\n"
 
     return output
@@ -125,15 +126,14 @@ def cwe_mitigation_summary(node_data: dict) -> str:
 
 
 def cwe_detection_summary(node_data: dict) -> str:
-    output = f"# A way to detect the attack pattern {node_data['capec_id']}\n"
-    output += node_data['description']
-
+    output = f"# A way to detect the weakness {node_data['cwe_id']}\n"
+    output += f"## Method: {node_data['method']}\n{node_data['description']}\n"
     return output
 
 
 def cve_summary(node_data: dict) -> str:
     output = f"# Vulnerability {node_data['original_id']}\n"
-    output += f"## Description\n{node_data['description']}"
+    output += f"## Description\n{node_data['description']}\n"
     output += f"## Severity\n{node_data['severity']}/10"
 
     return output
@@ -149,7 +149,7 @@ def cpe_summary(node_data: dict) -> str:
     elif part == 'o':
         product_type = "Operating system"
 
-    output = f"# Platform {node_data['original_id']}"
+    output = f"# Platform {node_data['original_id']}\n"
     output += f"{product_type} {node_data['product']} by {node_data['vendor']} version {node_data['version']}"
 
     return output
