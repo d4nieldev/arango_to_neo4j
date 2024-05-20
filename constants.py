@@ -34,3 +34,8 @@ INSTRUCTIONS_FILE_EXTENSION = '.cypher'
 # Graphs file
 GRAPH_FILE_NODES_KEY = 'nodes'
 GRAPH_FILE_EDGES_KEY = 'edges'
+
+
+# Neo4j constants
+MAX_THREADS = 100
+ONE_THREAD_BATCH_SIZE = 10

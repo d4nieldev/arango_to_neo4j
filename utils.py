@@ -37,20 +37,6 @@ def write_file(file_path: str, data: object, is_json: bool = False, create_path_
         raise e
 
 
-def get_src_and_dst_types_from_edge_type(edge_type: str) -> tuple[str, str]:
-    src_type = edge_type[0]
-
-    i = 1
-    while i < len(edge_type) and edge_type[i].islower():
-        src_type += edge_type[i]
-        i += 1
-
-    assert i < len(edge_type), f'invalid arango edge type name: {edge_type}'
-    dst_type = edge_type[i:]
-
-    return src_type.lower(), dst_type.lower()
-
-
 def pick_longest_description(desc1: str, desc2: str):
     if desc1 is None:
         return desc2.strip()
@@ -61,5 +47,31 @@ def pick_longest_description(desc1: str, desc2: str):
     stripped_desc2 = desc2.strip()
     return stripped_desc1 if len(stripped_desc1) > len(stripped_desc2) else stripped_desc2
 
+
+def create_markdown_table(items: list[dict[str, str]]) -> str:
+    assert len(items) > 0, "You shouldn't make tables with no data..."
+
+    keys = set()
+    for item in items:
+        keys.update(set(item.keys()))
+
+    keys = list(keys)
+
+    # table header
+    table = "|"
+    for key in keys:
+        table += f" {key.capitalize()} |"
+
+    table += '\n|'
+    for key in keys:
+        table += f" {'-'*len(key)} |"
+
+    # table body
+    for item in items:
+        table += '\n|'
+        for key in keys:
+            table += f" {item.get(key, "")} |"
+
+    return table
 
 

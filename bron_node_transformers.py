@@ -50,16 +50,18 @@ def technique_mitigation_trans(node: dict) -> dict:
 
 def technique_detection_trans(node: dict) -> dict:
     return {
+        'technique_id': node['technique_id'],
         'description': node['detections'],
     }
 
 
 def d3fend_mitigation_trans(node: dict) -> dict:
+    # TODO: add how it works
     return {
         'original_id': node['original_id'],
         'name': node['name'],
         'description': node['metadata']['definition'],
-        'synonyms': node['metadata']['synonyms']
+        'synonyms': list(node['metadata']['synonyms'])
     }
 
 
@@ -78,13 +80,15 @@ def capec_trans(node: dict) -> dict:
 
 def capec_mitigation_trans(node: dict) -> dict:
     return {
-        'description': node['metadata']
+        'capec_id': node['original_id'],
+        'description': node['metadata'],
     }
 
 
 def capec_detection_trans(node: dict) -> dict:
     return {
-        'description': node['metadata']
+        'capec_id': node['original_id'],
+        'description': node['metadata'],
     }
 
 
@@ -94,13 +98,14 @@ def cwe_trans(node: dict) -> dict:
         'name': node['name'],
         'description': pick_longest_description(node['metadata']['short_description'], node['metadata']['description']),
         'likelihood_of_exploit': node['metadata']['likeliehood_of_exploit'],
-        'applicable_platforms': node['metadata']['applicable_platform'],
+        'applicable_platforms': node['metadata']['applicable_platform'], # TODO: fix this field
         'common_consequences': node['metadata']['common_consequences'],
     }
 
 
 def cwe_mitigation_trans(node: dict) -> dict:
     return {
+        'cwe_id': node['original_id'],
         'description': node['metadata']['Description'],
         'phase': node['metadata']['Phase'],
     }
@@ -108,6 +113,7 @@ def cwe_mitigation_trans(node: dict) -> dict:
 
 def cwe_detection_trans(node: dict) -> dict:
     return {
+        'cwe_id': node['original_id'],
         'description': node['metadata']['Description'],
         'method': node['metadata']['Method'],
     }
@@ -128,3 +134,5 @@ def cpe_trans(node: dict) -> dict:
         'vendor': node['metadata']['vendor'],
         'version': node['metadata']['version'],
     }
+
+# TODO: add datasources, and descriptions on TechniqueTechnique_mitigation

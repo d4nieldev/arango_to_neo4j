@@ -2,21 +2,22 @@ import os
 import logging as log
 from abc import ABC, abstractmethod
 from threading import Lock
-from typing import Any
 import json
-from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
 
 from dotenv import load_dotenv
 from arango import ArangoClient
 from arango.graph import Graph as ArangoGraph
+from neo4j import GraphDatabase, Driver as Neo4jDriver
 
 import constants as c
 from utils import read_file, write_file
-from neo4j import GraphDatabase
+from tqdm import tqdm
 
 
 load_dotenv()
 log.getLogger().setLevel(log.INFO)
+lock = Lock()
 
 
 def get_arango_graph() -> ArangoGraph:
@@ -35,7 +36,7 @@ def get_arango_graph() -> ArangoGraph:
     return db.graph(name=db_graph_name)
 
 
-def get_args_mapping(obj: dict[str, Any]) -> str:
+def get_args_mapping(obj: dict[str, any]) -> str:
     """
     Generates an args mapping for a given dict, to later use in a neo4j query
     :param obj: the object
@@ -44,12 +45,7 @@ def get_args_mapping(obj: dict[str, Any]) -> str:
     return "{" + ", ".join([f"{k}: ${k}" for k in obj]) + "}"
 
 
-def is_neo4j_primitive(obj: Any):
-    primitives = str | int | float | None
-    return isinstance(obj, primitives) or (isinstance(obj, list) and all([isinstance(v, primitives) for v in obj]))
-
-
-def make_primitives(obj: dict[str, Any]) -> dict[str, str | int | float | None | list[str]]:
+def make_primitives(obj: dict[str, any]) -> dict[str, str | int | float | None | list[str]]:
     primitive = str | int | float
     primitives_dict = {}
     for k, v in obj.items():
@@ -66,7 +62,34 @@ def make_primitives(obj: dict[str, Any]) -> dict[str, str | int | float | None |
     return primitives_dict
 
 
-def create_neo4j_node_query(node: dict, node_type: str, merge: bool) -> (str, dict):
+def get_neo4j_driver() -> Neo4jDriver:
+    neo4j_uri = os.getenv(c.NEO4J_HOST)
+    neo4j_auth = (os.getenv(c.NEO4J_BRON_USERNAME), os.getenv(c.NEO4J_BRON_PASSWORD))
+
+    return GraphDatabase.driver(neo4j_uri, auth=neo4j_auth)
+
+
+def execute_instructions(instructions: list[tuple[str, dict]], filename: str = None) -> None:
+    if filename:
+        pbar = tqdm(total=len(instructions), desc=f"Executing instructions from '{filename}'")
+    else:
+        pbar = tqdm(total=len(instructions), desc=f"Executing instructions")
+
+    def execute_batch(driver: Neo4jDriver, instructions_batch: list[tuple[str, dict]]) -> None:
+        for query, params in instructions_batch:
+            driver.execute_query(query_=query, parameters_=params)
+            with lock:
+                pbar.update(1)
+
+    with get_neo4j_driver() as driver:
+        batches = [instructions[i:i + c.ONE_THREAD_BATCH_SIZE]
+                   for i in range(0, len(instructions), c.ONE_THREAD_BATCH_SIZE)]
+        with ThreadPoolExecutor(max_workers=c.MAX_THREADS) as executor:
+            for instructions_batch in batches:
+                executor.submit(execute_batch, driver, instructions_batch)
+
+
+def create_neo4j_node_query(node: dict, node_type: str, merge: bool) -> tuple[str, dict]:
     """
     Creates a query to insert the node to a neo4j database.
     :param node: the JSON representing the node to be inserted
@@ -84,7 +107,7 @@ def create_neo4j_node_query(node: dict, node_type: str, merge: bool) -> (str, di
     return query, make_primitives(node)
 
 
-def create_neo4j_edge_query(edge: dict, src_type: str, dst_type: str, relation: str, merge: bool) -> (str, dict):
+def create_neo4j_edge_query(edge: dict, src_type: str, dst_type: str, relation: str, merge: bool) -> tuple[str, dict]:
     """
     Creates a query to insert the edge to a neo4j database.
     :param edge: the JSON representing the edge to be inserted
@@ -95,8 +118,8 @@ def create_neo4j_edge_query(edge: dict, src_type: str, dst_type: str, relation: 
     :return: a cypher query, and the parameters
     """
     edge_args_mapping = get_args_mapping(obj=edge)
-    query = f'MATCH (src:{src_type} {{ {c.ARANGO_NODE_ID_PROP}: "{edge[c.ARANGO_EDGE_FROM_ID_PROP]}" }} '
-    query += f'MATCH (dst:{dst_type} {{ {c.ARANGO_NODE_ID_PROP}: "{edge[c.ARANGO_EDGE_TO_ID_PROP]}" }} '
+    query = f'MATCH (src:{src_type} {{ {c.ARANGO_NODE_ID_PROP}: "{edge[c.ARANGO_EDGE_FROM_ID_PROP]}" }}) '
+    query += f'MATCH (dst:{dst_type} {{ {c.ARANGO_NODE_ID_PROP}: "{edge[c.ARANGO_EDGE_TO_ID_PROP]}" }}) '
     query += f'WHERE src IS NOT NULL AND dst IS NOT NULL '
     query += f'MERGE (src)-[r:{relation}]->(dst) '
     query += f'ON CREATE SET r = {edge_args_mapping} '
@@ -117,7 +140,6 @@ class ArangoToNeo4j(ABC):
         self.arango_nodes: dict[str, list[dict]] = dict()
         self.arango_edges: dict[str, list[dict]] = dict()
         self.is_loaded: bool = False
-        self.__lock = Lock()
 
     def load_graph(self, from_file: bool = True, rewrite_file: bool = False) -> None:
         """
@@ -206,6 +228,21 @@ class ArangoToNeo4j(ABC):
 
         log.info(f"Saved {self.__nodes_count()} nodes and {self.__edges_count()} edges to '{self.graph_file_path}'")
 
+    def generate_nodes_instructions(self, node_type: str, arango_nodes: list[dict], merge: bool) -> list[tuple[str, dict]]:
+        transformed_nodes = [self._arango_node_transformer(arango_node=n, node_type=node_type)
+                             for n in tqdm(arango_nodes, desc=f'transforming {node_type} nodes')]
+        instructions = [create_neo4j_node_query(node=tn, node_type=node_type, merge=merge)
+                        for tn in tqdm(transformed_nodes, desc=f'generating instructions for {node_type} nodes')]
+        return instructions
+
+    def generate_edges_instructions(self, edge_type: str, arango_edges: list[dict], merge: bool) -> list[tuple[str, dict]]:
+        transformed_edges = [self._arango_edge_transformer(arango_edge=e, edge_type=edge_type)
+                             for e in tqdm(arango_edges, desc=f'transforming {edge_type} edges')]
+        instructions = [create_neo4j_edge_query(edge=te, src_type=s, dst_type=d, relation=r, merge=merge)
+                        for te, r, s, d in
+                        tqdm(transformed_edges, desc=f'generating instructions for {edge_type} edges')]
+        return instructions
+
     def generate_instructions(self, merge: bool = True) -> None:
         """
         Generates instructions that will create the graph in neo4j to later be executed. Saves all the instructions
@@ -219,10 +256,7 @@ class ArangoToNeo4j(ABC):
             node_type_file_path = os.path.join(self.instructions_dir_path,
                                                c.INSTRUCTIONS_NODES_DIR_NAME,
                                                node_type + c.INSTRUCTIONS_FILE_EXTENSION)
-            transformed_nodes = [self._arango_node_transformer(arango_node=n, node_type=node_type)
-                                 for n in tqdm(arango_nodes, desc=f'transforming {node_type} nodes')]
-            instructions = [create_neo4j_node_query(node=tn, node_type=node_type, merge=merge)
-                            for tn in tqdm(transformed_nodes, desc=f'generating instructions for {node_type} nodes')]
+            instructions = self.generate_nodes_instructions(node_type=node_type, arango_nodes=arango_nodes, merge=merge)
             write_file(file_path=node_type_file_path, data=instructions, is_json=True, create_path_if_not_exist=True)
             log.info(f"Saved {len(instructions)} {node_type} instructions to '{node_type_file_path}'")
 
@@ -230,45 +264,68 @@ class ArangoToNeo4j(ABC):
             edge_type_file_path = os.path.join(self.instructions_dir_path,
                                                c.INSTRUCTIONS_EDGES_DIR_NAME,
                                                edge_type + c.INSTRUCTIONS_FILE_EXTENSION)
-            transformed_edges = [self._arango_edge_transformer(arango_edge=e, edge_type=edge_type)
-                                 for e in tqdm(arango_edges, desc=f'transforming {edge_type} edges')]
-            instructions = [create_neo4j_edge_query(edge=te, src_type=s, dst_type=d, relation=r, merge=merge)
-                            for te, r, s, d in tqdm(transformed_edges, desc=f'generating instructions for {edge_type} edges')]
+            instructions = self.generate_edges_instructions(edge_type=edge_type, arango_edges=arango_edges, merge=merge)
             write_file(file_path=edge_type_file_path, data=instructions, is_json=True, create_path_if_not_exist=True)
             log.info(f"Saved {len(instructions)} {edge_type} instructions to '{edge_type_file_path}'")
 
-    def build_neo4j(self) -> None:
+    def validate_build_successful(self):
         """
-        Build the Neo4j graph from the instructions files (.cypher)
+        Checks whether all nodes and all edges were loaded successfully from arango to neo4j
         """
-        neo4j_uri = os.getenv(c.NEO4J_HOST)
-        neo4j_auth = (os.getenv(c.NEO4J_BRON_USERNAME), os.getenv(c.NEO4J_BRON_PASSWORD))
-        labels_counter = 0
+        assert self.is_loaded, "graph data must be loaded before validating that the build was successful"
 
-        def execute_instructions(tx, filename: str, instructions: list[tuple[str, dict]]) -> None:
-            for query, params in tqdm(instructions, desc=f"Executing instructions from '{filename}'"):
-                tx.run(query, **params)
+        log.info("Begin neo4j graph build validation...")
 
-        with GraphDatabase.driver(neo4j_uri, auth=neo4j_auth) as driver:
+        with get_neo4j_driver() as driver:
+            for node_type, nodes in self.arango_nodes.items():
+                arango_id_to_node = {node['_id']: node for node in nodes}
+                arango_ids = set(arango_id_to_node.keys())
+                while True:
+                    records, _, _ = driver.execute_query(f"MATCH (n:{node_type}) RETURN n._id")
+                    neo4j_ids = set([record[0] for record in records])
+                    diff_nodes = [arango_id_to_node[node_id] for node_id in set(arango_ids - neo4j_ids)]
+                    if len(diff_nodes) == 0:
+                        log.info(f"All nodes of type '{node_type}' have been created :)")
+                        break
+                    log.info(f"Found {len(diff_nodes)} missing nodes of type '{node_type}'! Creating nodes...")
+                    instructions = self.generate_nodes_instructions(node_type=node_type, arango_nodes=diff_nodes, merge=False)
+                    execute_instructions(instructions=instructions, filename=node_type)
+
+            for edge_type, edges in self.arango_edges.items():
+                arango_id_to_edge = {edge['_id']: edge for edge in edges}
+                arango_ids = set(arango_id_to_edge.keys())
+                rel_type, src_types, dst_types = self._arango_edge_type_info(edge_type=edge_type)
+                src_types_str = ':' + ':'.join(src_types)
+                dst_types_str = ':' + ':'.join(dst_types)
+                while True:
+                    records, _, _ = driver.execute_query(f"MATCH (src{src_types_str})-[r:{rel_type}]->(dst{dst_types_str}) RETURN r._id")
+                    neo4j_ids = set([record[0] for record in records])
+                    diff_edges = [arango_id_to_edge[edge_id] for edge_id in set(arango_ids - neo4j_ids)]
+                    if len(diff_edges) == 0:
+                        log.info(f"All edges of type '{edge_type}' have been created :)")
+                        break
+                    log.info(f"Found {len(diff_edges)} missing edges of type '{edge_type}'! Creating edges...")
+                    instructions = self.generate_edges_instructions(edge_type=edge_type, arango_edges=diff_edges, merge=False)
+                    execute_instructions(instructions=instructions, filename=node_type)
+
+    def build_neo4j(self, ignore_files: list[str] = None) -> None:
+        """
+        Build the Neo4j graph from the nodes and edges instructions files (.cypher)
+        """
+        with get_neo4j_driver() as driver:
             driver.verify_connectivity()
 
             nodes_dir = os.path.join(self.instructions_dir_path, c.INSTRUCTIONS_NODES_DIR_NAME)
-            for node_type_filename in os.listdir(nodes_dir):
-                node_type_file = os.path.join(nodes_dir, node_type_filename)
-                instructions = read_file(file_path=node_type_file, is_json=True)
-                with driver.session() as session:
-                    def transaction_function(tx): return execute_instructions(tx, node_type_file, instructions)
-                    session.write_transaction(transaction_function=transaction_function)
-
             edges_dir = os.path.join(self.instructions_dir_path, c.INSTRUCTIONS_EDGES_DIR_NAME)
-            for edge_type_filename in os.listdir(edges_dir):
-                edge_type_file = os.path.join(edges_dir, edge_type_filename)
-                instructions = read_file(file_path=edge_type_file, is_json=True)
-                with driver.session() as session:
-                    def transaction_function(tx): return execute_instructions(tx, edge_type_file, instructions)
-                    session.write_transaction(transaction_function=transaction_function)
 
-
+            for directory in [nodes_dir, edges_dir]:
+                for filename in os.listdir(directory):
+                    file_path = os.path.join(directory, filename)
+                    if ignore_files and file_path in ignore_files:
+                        log.info(f"Ignoring file '{file_path}'")
+                        continue
+                    instructions = read_file(file_path=file_path, is_json=True)
+                    execute_instructions(instructions, file_path)
 
     @abstractmethod
     def _arango_node_transformer(self, arango_node: dict, node_type: str) -> dict:
@@ -290,5 +347,14 @@ class ArangoToNeo4j(ABC):
         :return: a dict representing only the relevant features of this edge, a string representing the
                  relation the edge represents, a string representing the source node type, and a string representing
                  the destination node type
+        """
+
+    @abstractmethod
+    def _arango_edge_type_info(self, edge_type: str) -> tuple[str, list[str], list[str]]:
+        """
+        Given an edge type, this function returns the source and destination types this edge type represents, and also
+        the relation type (what is written on the neo4j edges)
+        :param edge_type: the edge collection type
+        :return: relation type, list of source node types, list of destination node types
         """
 
