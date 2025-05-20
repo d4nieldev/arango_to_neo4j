@@ -36,7 +36,7 @@ def technique_trans(node: dict) -> dict:
     return {
         'original_id': node['original_id'],
         'name': node['name'],
-        'description': node['metadata']['description'],
+        'description': pick_longest_description(node['metadata']['description'], node['metadata']['short_description']),
     }
 
 
@@ -50,18 +50,17 @@ def technique_mitigation_trans(node: dict) -> dict:
 
 def technique_detection_trans(node: dict) -> dict:
     return {
-        'technique_id': node['technique_id'],
-        'description': node['detections'],
+        'original_id': node['original_id'],
+        'name': node['name'],
+        'description': node['metadata']['description'],
     }
 
 
 def d3fend_mitigation_trans(node: dict) -> dict:
-    # TODO: add how it works
     return {
         'original_id': node['original_id'],
         'name': node['name'],
-        'description': node['metadata']['definition'],
-        'synonyms': list(node['metadata']['synonyms'])
+        'description': node['metadata']['description'],
     }
 
 
@@ -69,8 +68,8 @@ def capec_trans(node: dict) -> dict:
     return {
         'original_id': f"CAPEC-{node['original_id']}",
         'name': node['name'],
-        'description': pick_longest_description(node['metadata']['short_description'], node['metadata']['description']),
         'consequences': node['metadata']['consequences'],
+        'description': pick_longest_description(node['metadata']['description'], node['metadata']['extended_description']),
         'likelihood_of_attack': node['metadata']['likelihood_of_attack'],
         'resources_required': node['metadata']['resources_required'],
         'skills_required': node['metadata']['skills_required'],
@@ -80,14 +79,14 @@ def capec_trans(node: dict) -> dict:
 
 def capec_mitigation_trans(node: dict) -> dict:
     return {
-        'capec_id': node['original_id'],
+        'name': node['name'],
         'description': node['metadata'],
     }
 
 
 def capec_detection_trans(node: dict) -> dict:
     return {
-        'capec_id': node['original_id'],
+        'name': node['original_id'],
         'description': node['metadata'],
     }
 
@@ -98,24 +97,24 @@ def cwe_trans(node: dict) -> dict:
         'name': node['name'],
         'description': pick_longest_description(node['metadata']['short_description'], node['metadata']['description']),
         'likelihood_of_exploit': node['metadata']['likeliehood_of_exploit'],
-        'applicable_platforms': node['metadata']['applicable_platform'], # TODO: fix this field
+        'applicable_platforms': node['metadata']['applicable_platform'],
         'common_consequences': node['metadata']['common_consequences'],
     }
 
 
 def cwe_mitigation_trans(node: dict) -> dict:
     return {
-        'cwe_id': node['original_id'],
-        'description': node['metadata']['Description'],
+        'name': node['name'],
         'phase': node['metadata']['Phase'],
+        'description': node['metadata']['Description'],
     }
 
 
 def cwe_detection_trans(node: dict) -> dict:
     return {
-        'cwe_id': node['original_id'],
-        'description': node['metadata']['Description'],
+        'name': node['name'],
         'method': node['metadata']['Method'],
+        'description': node['metadata']['Description'],
     }
 
 
@@ -135,4 +134,23 @@ def cpe_trans(node: dict) -> dict:
         'version': node['metadata']['version'],
     }
 
-# TODO: add datasources, and descriptions on TechniqueTechnique_mitigation
+
+def engage_activity_trans(node: dict) -> dict:
+    return {
+        'original_id': node['original_id'],
+        'name': node['name'],
+    }
+
+
+def engage_approach_trans(node: dict) -> dict:
+    return {
+        'original_id': node['original_id'],
+        'name': node['name'],
+    }
+
+
+def engage_goal_trans(node: dict) -> dict:
+    return {
+        'original_id': node['original_id'],
+        'name': node['name'],
+    }
