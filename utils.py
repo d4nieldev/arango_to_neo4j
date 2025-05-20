@@ -3,6 +3,7 @@ import json
 import logging as log
 
 log.getLogger().setLevel(log.INFO)
+log.getLogger('httpx').setLevel(log.WARNING)
 
 
 def read_file(file_path: str, is_json: bool = False, split_by_new_line: bool = False) -> (str or dict or list):
@@ -73,5 +74,4 @@ def create_markdown_table(items: list[dict[str, str]]) -> str:
             table += f" {item.get(key, "")} |"
 
     return table
-
 
