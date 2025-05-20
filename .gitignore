@@ -3,3 +3,5 @@
 .idea
 arango_graphs
 instructions
+__pycache__
+.DS_STORE
