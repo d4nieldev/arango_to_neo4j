@@ -56,7 +56,7 @@ def technique_mitigation_summary(node_data: dict) -> str:
 
 def technique_detection_summary(node_data: dict) -> str:
     technique_str = 'sub-technique' if '.' in node_data['technique_id'] else 'technique'
-    output = f"# Detections for {technique_str} {node_data['technique_id']}\n"
+    output = f"# Ways to detect {technique_str} {node_data['technique_id']}\n"
     output += node_data['description']
 
     return output
@@ -70,7 +70,7 @@ def capec_summary(node_data: dict) -> str:
     if node_data['typical_severity'].strip() != "":
         output += f"## Typical Severity\n{node_data['typical_severity']}\n"
 
-    skills_required: list[dict] = [json.loads(skill) for skill in node_data['skills_required']]
+    skills_required: list[dict] = [json.loads(skill) for skill in node_data['skills_required'] if skill is str]
     if len(skills_required) > 0:
         skills_table = create_markdown_table(items=skills_required)
         output += f"## Skills Required\n{skills_table}\n"
@@ -80,7 +80,7 @@ def capec_summary(node_data: dict) -> str:
             resources_required[0] != "None: No specialized resources are required to execute this type of attack."):
         output += f"## Resources Required\n{'\n'.join([f'* {r}' for r in resources_required])}\n"
 
-    consequences: list[dict] = [json.loads(con) for con in node_data['consequences']]
+    consequences: list[dict] = [json.loads(con) for con in node_data['consequences'] if con is str]
     if len(consequences) > 0:
         consequences_table = create_markdown_table(items=consequences)
         output += f"## Consequences\n{consequences_table}"
@@ -106,12 +106,13 @@ def cwe_summary(node_data: dict) -> str:
     output = f"# Weakness \"{node_data['name']}\" ({node_data['original_id']})\n"
     output += f"## Description\n{node_data['description']}\n"
 
-    common_consequences = [json.loads(con) for con in node_data['common_consequences']]
+    common_consequences = [json.loads(con) for con in node_data['common_consequences'] if con is str]
     if len(common_consequences) > 0:
         common_consequences_table = create_markdown_table(items=common_consequences)
         output += f"## Common Consequences\n{common_consequences_table}\n"
 
     if node_data['likelihood_of_exploit'].strip() != "":
+        output += f"## Likelihood of Exploit\n{node_data['likelihood_of_exploit']}\n"
         output += f"## Likelihood of Exploit\n{node_data['likelihood_of_exploit']}\n"
 
     return output
