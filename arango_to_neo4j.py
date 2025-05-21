@@ -389,9 +389,7 @@ class ArangoToNeo4j(ABC):
                     break
                 if len(missing_edges) > 0:
                     log.info(f"Found {len(missing_edges)} missing edges of type '{edge_type}'! Creating...")
-                    instructions = self.__generate_edges_instructions(
-                        edge_type=edge_type, arango_edges=missing_edges, merge=False
-                    )
+                    instructions = self.__generate_edges_instructions(edge_type=edge_type, arango_edges=missing_edges, merge=False)
                     execute_queries(queries=instructions)
                 if len(excessive_edges) > 0:
                     log.warning(f"Found {len(excessive_edges)} excessive edges of type '{edge_type}'! Deleting...")
