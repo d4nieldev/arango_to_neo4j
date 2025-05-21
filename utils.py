@@ -1,41 +1,34 @@
 import os
 import json
+from pathlib import Path
 import logging as log
+from typing import Union, List, Dict
 
 log.getLogger().setLevel(log.INFO)
 log.getLogger('httpx').setLevel(log.WARNING)
 
 
-def read_file(file_path: str, is_json: bool = False, split_by_new_line: bool = False) -> (str or dict or list):
-    try:
-        with open(file_path, "r") as f:
-            if is_json:
-                data = json.load(f)
-            else:
-                data = f.read()
-                if split_by_new_line:
-                    data = data.split("\n")
-        return data
-    except Exception as e:
-        log.error(f"Error: file: {file_path} {repr(e)}")
-        raise e
+def read_file(file_path: Path, is_json: bool = False, split_by_new_line: bool = False) -> Union[Dict, List, str]:
+    if is_json:
+        data = json.loads(file_path.read_text())
+    else:
+        data = file_path.read_text()
+        if split_by_new_line:
+            data = data.split("\n")
+    return data
 
 
-def write_file(file_path: str, data: object, is_json: bool = False, create_path_if_not_exist: bool = True) -> None:
-    try:
-        if create_path_if_not_exist:
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        with open(file_path, "w") as f:
-            if is_json:
-                json.dump(data, f, indent=4)
-            else:
-                if isinstance(data, list):
-                    f.write('\n'.join(data))
-                else:
-                    f.write(data)
-    except Exception as e:
-        log.error(f"Error: {repr(e)}")
-        raise e
+def write_file(file_path: Path, data: object, is_json: bool = False, create_path_if_not_exist: bool = True) -> None:
+    if create_path_if_not_exist:
+        file_path.parent.mkdir()
+    
+    if is_json:
+        file_path.write_text(json.dumps(data, indent=2))
+    else:
+        if isinstance(data, list):
+            file_path.write_text('\n'.join(data))
+        else:
+            file_path.write_text(repr(data))
 
 
 def pick_longest_description(desc1: str, desc2: str):

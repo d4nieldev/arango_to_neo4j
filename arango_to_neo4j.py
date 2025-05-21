@@ -1,10 +1,11 @@
 import os
+import json
+from pathlib import Path
 import logging as log
 from abc import ABC, abstractmethod
 from threading import Lock
-import json
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Optional, List, Tuple, Dict
+from typing import Any, Optional, List, Tuple, Dict, Union
 
 from dotenv import load_dotenv
 from arango.client import ArangoClient
@@ -22,10 +23,6 @@ lock = Lock()
 
 
 def get_arango_graph() -> ArangoGraph:
-    """
-    Connects to the arango host and database, and retrieves the graph
-    :return: The arango graph object representing the wanted graph
-    """
     try:
         arango_host = os.environ[c.ARANGO_HOST]
         db_name = os.environ[c.ARANGO_DB_NAME]
@@ -40,16 +37,11 @@ def get_arango_graph() -> ArangoGraph:
     return db.graph(name=db_graph_name)
 
 
-def get_args_mapping(obj: dict[str, Any]) -> str:
-    """
-    Generates an args mapping for a given dict, to later use in a neo4j query
-    :param obj: the object
-    :return: string that represents the object before parameters substitution
-    """
+def get_args_mapping(obj: Dict[str, Any]) -> str:
     return "{" + ", ".join([f"{k}: ${k}" for k in obj]) + "}"
 
 
-def make_primitives(obj: dict[str, Any]) -> dict[str, str | int | float | None | list[str]]:
+def make_primitives(obj: Dict[str, Any]) -> Dict[str, Optional[Union[str, int, float, List[str]]]]:
     primitive = str | int | float
     primitives_dict = {}
     for k, v in obj.items():
@@ -76,7 +68,7 @@ def get_neo4j_driver() -> Neo4jDriver:
     return GraphDatabase.driver(neo4j_uri, auth=neo4j_auth)
 
 
-def execute_queries(queries: list[tuple[str, dict]], filename: Optional[str] = None) -> Any:
+def execute_queries(queries: List[Tuple[str, Dict]], filename: Optional[str] = None) -> Any:
     if filename:
         pbar = tqdm(total=len(queries),desc=f"Executing instructions from '{filename}'")
     else:
@@ -99,14 +91,7 @@ def execute_queries(queries: list[tuple[str, dict]], filename: Optional[str] = N
     return results
 
 
-def create_neo4j_node_query(node: dict, node_type: str, merge: bool) -> tuple[str, dict]:
-    """
-    Creates a query to insert the node to a neo4j database.
-    :param node: the JSON representing the node to be inserted
-    :param merge: whether to merge the node with an existing node with the same id
-    :param node_type: the node type
-    :return: a cypher query, and the parameters
-    """
+def create_neo4j_node_query(node: Dict, node_type: str, merge: bool) -> tuple[str, Dict]:
     node_args_mapping = get_args_mapping(obj=node)
     query = f'MERGE (n:{node_type} {{ {c.ARANGO_NODE_ID_PROP}: "{node[c.ARANGO_NODE_ID_PROP]}" }}) '
     query += f'ON CREATE SET n = {node_args_mapping} '
@@ -117,16 +102,7 @@ def create_neo4j_node_query(node: dict, node_type: str, merge: bool) -> tuple[st
     return query, make_primitives(node)
 
 
-def create_neo4j_edge_query(edge: dict, src_type: str, dst_type: str, relation: str, merge: bool) -> tuple[str, dict]:
-    """
-    Creates a query to insert the edge to a neo4j database.
-    :param edge: the JSON representing the edge to be inserted
-    :param src_type: the node type of the source node in the edge
-    :param dst_type: the node type of the destination node in the edge
-    :param relation: few words that describes the connection (written on the edge)
-    :param merge: whether to merge the edge with an existing edge from the same type that connects the same nodes
-    :return: a cypher query, and the parameters
-    """
+def create_neo4j_edge_query(edge: Dict, src_type: str, dst_type: str, relation: str, merge: bool) -> Tuple[str, Dict]:
     edge_args_mapping = get_args_mapping(obj=edge)
     query = f'MATCH (src:{src_type} {{ {c.ARANGO_NODE_ID_PROP}: "{edge[c.ARANGO_EDGE_FROM_ID_PROP]}" }}) '
     query += f'MATCH (dst:{dst_type} {{ {c.ARANGO_NODE_ID_PROP}: "{edge[c.ARANGO_EDGE_TO_ID_PROP]}" }}) '
@@ -142,8 +118,8 @@ def create_neo4j_edge_query(edge: dict, src_type: str, dst_type: str, relation: 
 
 class ArangoToNeo4j(ABC):
     def __init__(self, graph_name: str, ignored_node_types: Tuple[str, ...] = (), ignored_edge_types: Tuple[str, ...] = ()):
-        self.graph_file_path = os.path.join(c.GRAPHS_DIR, f'{graph_name}{c.GRAPH_FILE_EXTENSION}')
-        self.instructions_dir_path = os.path.join(c.INSTRUCTIONS_DIR, graph_name)
+        self.graph_file_path = c.GRAPHS_DIR / f'{graph_name}{c.GRAPH_FILE_EXTENSION}'
+        self.instructions_dir_path = c.INSTRUCTIONS_DIR / graph_name
         self.ignored_node_types = ignored_node_types
         self.ignored_edge_types = ignored_edge_types
 
@@ -171,15 +147,17 @@ class ArangoToNeo4j(ABC):
         :param from_file: whether to load from existing file (self.graph_file_path)
         :param rewrite_file: whether to rewrite the current graph file with the loaded data
         """
-        if from_file and os.path.exists(self.graph_file_path):
+        if from_file and self.graph_file_path.exists():
             self.__load_graph_from_file()
+        elif not self.graph_file_path.exists():
+            raise ValueError(f"Graph file path '{self.graph_file_path}' does not exist.")
         else:
             self.__load_graph_from_host()
 
         log.info(f"Successfully loaded {self.nodes_count} nodes and {self.edges_count} edges.")
 
         self.is_loaded = True
-        if rewrite_file or not os.path.exists(self.graph_file_path):
+        if rewrite_file or not self.graph_file_path.exists():
             self.__save_graph_to_file()
             log.info(f"The loaded graph was saved to '{self.graph_file_path}'.")
 
@@ -292,12 +270,8 @@ class ArangoToNeo4j(ABC):
             raise ValueError("Graph data must be loaded before generating instructions. Call `self.load_graph()` first.")
 
         for node_type, arango_nodes in self.arango_nodes.items():
-            node_type_file_path = os.path.join(
-                self.instructions_dir_path,
-                c.INSTRUCTIONS_NODES_DIR_NAME,
-                node_type + c.INSTRUCTIONS_FILE_EXTENSION
-            )
-            if load_if_exists and os.path.exists(node_type_file_path):
+            node_type_file_path = self.instructions_dir_path / c.INSTRUCTIONS_NODES_DIR_NAME / f'{node_type}{c.INSTRUCTIONS_FILE_EXTENSION}'
+            if load_if_exists and node_type_file_path.exists():
                 log.info(f"Instructions file '{node_type_file_path}' already exists, skipping generation of {node_type} nodes")
                 continue
             instructions = self.__generate_nodes_instructions(node_type=node_type, arango_nodes=arango_nodes, merge=merge)
@@ -305,12 +279,8 @@ class ArangoToNeo4j(ABC):
             log.info(f"Saved {len(instructions)} {node_type} instructions to '{node_type_file_path}'")
 
         for edge_type, arango_edges in self.arango_edges.items():
-            edge_type_file_path = os.path.join(
-                self.instructions_dir_path,
-                c.INSTRUCTIONS_EDGES_DIR_NAME,
-                edge_type + c.INSTRUCTIONS_FILE_EXTENSION
-            )
-            if load_if_exists and os.path.exists(edge_type_file_path):
+            edge_type_file_path = self.instructions_dir_path / c.INSTRUCTIONS_EDGES_DIR_NAME / f'{edge_type}{c.INSTRUCTIONS_FILE_EXTENSION}'
+            if load_if_exists and edge_type_file_path.exists():
                 log.info(f"Instructions file '{edge_type_file_path}' already exists, skipping generation of {edge_type} edges")
                 continue
             instructions = self.__generate_edges_instructions(edge_type=edge_type, arango_edges=arango_edges, merge=merge)
@@ -321,17 +291,16 @@ class ArangoToNeo4j(ABC):
         """
         Build the Neo4j graph from the nodes and edges instructions files (.cypher)
         """
-        nodes_dir = os.path.join(self.instructions_dir_path, c.INSTRUCTIONS_NODES_DIR_NAME)
-        edges_dir = os.path.join(self.instructions_dir_path, c.INSTRUCTIONS_EDGES_DIR_NAME)
+        nodes_dir = self.instructions_dir_path / c.INSTRUCTIONS_NODES_DIR_NAME
+        edges_dir = self.instructions_dir_path / c.INSTRUCTIONS_EDGES_DIR_NAME
 
-        for directory in [nodes_dir, edges_dir]:
-            for filename in os.listdir(directory):
-                file_path = os.path.join(directory, filename)
-                if ignore_files and file_path in ignore_files:
-                    log.info(f"Ignoring file '{file_path}'")
+        for instructions_dir in [nodes_dir, edges_dir]:
+            for instructions_file in instructions_dir.iterdir():
+                if ignore_files and instructions_file in ignore_files:
+                    log.info(f"Ignoring file '{instructions_file}'")
                     continue
-                instructions = read_file(file_path=file_path, is_json=True)
-                execute_queries(instructions, file_path)
+                instructions = read_file(file_path=instructions_file, is_json=True)
+                execute_queries(instructions, str(instructions_file))
 
     def validate_build_successful(self):
         """

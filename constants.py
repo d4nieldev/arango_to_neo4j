@@ -1,3 +1,6 @@
+from pathlib import Path
+
+
 # Environment variables names
 ARANGO_HOST = 'ARANGO_HOST'
 ARANGO_USERNAME = 'ARANGO_USERNAME'
@@ -24,13 +27,13 @@ ARANGO_EDGE_TO_ID_PROP = '_to'
 
 
 # File system
-INSTRUCTIONS_DIR = 'instructions'
-DOCUMENTS_DIR = 'documents'
-INSTRUCTIONS_NODES_DIR_NAME = 'nodes'
-INSTRUCTIONS_EDGES_DIR_NAME = 'edges'
-GRAPHS_DIR = 'arango_graphs'
-GRAPH_FILE_EXTENSION = '.json'
-INSTRUCTIONS_FILE_EXTENSION = '.cypher'
+INSTRUCTIONS_DIR = Path('instructions')
+DOCUMENTS_DIR = Path('documents')
+INSTRUCTIONS_NODES_DIR_NAME = Path('nodes')
+INSTRUCTIONS_EDGES_DIR_NAME = Path('edges')
+GRAPHS_DIR = Path('arango_graphs')
+GRAPH_FILE_EXTENSION = Path('.json')
+INSTRUCTIONS_FILE_EXTENSION = Path('.cypher')
 
 
 # Graphs file
