@@ -344,66 +344,65 @@ class ArangoToNeo4j(ABC):
         driver = get_neo4j_driver()
 
         # Validate nodes
-        with driver.session(database=os.getenv(c.NEO4J_DB_NAME)) as session:
-            for node_type, nodes in self.arango_nodes.items():
-                arango_id_to_node = {node['_id']: node for node in nodes}
-                arango_ids = set(arango_id_to_node.keys())
-                while True:
+        for node_type, nodes in self.arango_nodes.items():
+            arango_id_to_node = {node['_id']: node for node in nodes}
+            arango_ids = set(arango_id_to_node.keys())
+            while True:
+                with driver.session(database=os.getenv(c.NEO4J_DB_NAME)) as session:
                     records = session.run(f"MATCH (n:{node_type}) RETURN n._id")
-                    neo4j_ids = set([record[0] for record in records])
-                    missing_nodes = [arango_id_to_node[node_id]for node_id in set(arango_ids - neo4j_ids)]
-                    excessive_nodes = [arango_id_to_node[node_id]for node_id in set(neo4j_ids - arango_ids)]
-                    if len(missing_nodes) == len(excessive_nodes) == 0:
-                        log.info(f"All nodes of type '{node_type}' have been created.")
-                        break
-                    if len(missing_nodes) > 0:
-                        log.warning(f"Found {len(missing_nodes)} missing nodes of type '{node_type}'. Adding...")
-                        instructions = self.__generate_nodes_instructions(
-                            node_type=node_type, arango_nodes=missing_nodes, merge=False
+                neo4j_ids = set([record[0] for record in records])
+                missing_nodes = [arango_id_to_node[node_id]for node_id in set(arango_ids - neo4j_ids)]
+                excessive_nodes = [arango_id_to_node[node_id]for node_id in set(neo4j_ids - arango_ids)]
+                if len(missing_nodes) == len(excessive_nodes) == 0:
+                    log.info(f"All nodes of type '{node_type}' have been created.")
+                    break
+                if len(missing_nodes) > 0:
+                    log.warning(f"Found {len(missing_nodes)} missing nodes of type '{node_type}'. Adding...")
+                    instructions = self.__generate_nodes_instructions(node_type=node_type, arango_nodes=missing_nodes, merge=False)
+                    execute_queries(queries=instructions)
+                if len(excessive_nodes) > 0:
+                    log.warning(f"Found {len(excessive_nodes)} excessive nodes of type '{node_type}'. Deleting...")
+                    instructions = [
+                        (
+                            f"MATCH (n:{node_type} {{ _id: $_id }}) DETACH DELETE n",
+                            {'_id': node[c.ARANGO_NODE_ID_PROP]}
                         )
-                        execute_queries(queries=instructions)
-                    if len(excessive_nodes) > 0:
-                        log.warning(f"Found {len(excessive_nodes)} excessive nodes of type '{node_type}'. Deleting...")
-                        instructions = [
-                            (
-                                f"MATCH (n:{node_type} {{ _id: $_id }}) DETACH DELETE n",
-                                {'_id': node[c.ARANGO_NODE_ID_PROP]}
-                            )
-                            for node in excessive_nodes
-                        ]
-                        execute_queries(queries=instructions)
+                        for node in excessive_nodes
+                    ]
+                    execute_queries(queries=instructions)
 
-            # Validate edges
-            for edge_type, edges in self.arango_edges.items():
-                arango_id_to_edge = {edge['_id']: edge for edge in edges}
-                arango_ids = set(arango_id_to_edge.keys())
-                rel_type, src_types, dst_types = self._arango_edge_type_info(edge_type=edge_type)
-                src_types_str = ':' + ':'.join(src_types)
-                dst_types_str = ':' + ':'.join(dst_types)
-                while True:
+        # Validate edges
+        for edge_type, edges in self.arango_edges.items():
+            arango_id_to_edge = {edge['_id']: edge for edge in edges}
+            arango_ids = set(arango_id_to_edge.keys())
+            rel_type, src_types, dst_types = self._arango_edge_type_info(edge_type=edge_type)
+            src_types_str = ':' + ':'.join(src_types)
+            dst_types_str = ':' + ':'.join(dst_types)
+            while True:
+                with driver.session(database=os.getenv(c.NEO4J_DB_NAME)) as session:
                     records = session.run(f"MATCH (src{src_types_str})-[r:{rel_type}]->(dst{dst_types_str}) RETURN r._id")
-                    neo4j_ids = set([record[0] for record in records])
-                    missing_edges = [arango_id_to_edge[edge_id]for edge_id in set(arango_ids - neo4j_ids)]
-                    excessive_edges = [arango_id_to_edge[edge_id]for edge_id in set(neo4j_ids - arango_ids)]
-                    if len(missing_edges) == len(excessive_edges) == 0:
-                        log.info(f"All edges of type '{edge_type}' have been created.")
-                        break
-                    if len(missing_edges) > 0:
-                        log.info(f"Found {len(missing_edges)} missing edges of type '{edge_type}'! Creating...")
-                        instructions = self.__generate_edges_instructions(
-                            edge_type=edge_type, arango_edges=missing_edges, merge=False
+                neo4j_ids = set([record[0] for record in records])
+                missing_edges = [arango_id_to_edge[edge_id]for edge_id in set(arango_ids - neo4j_ids)]
+                excessive_edges = [arango_id_to_edge[edge_id]for edge_id in set(neo4j_ids - arango_ids)]
+                if len(missing_edges) == len(excessive_edges) == 0:
+                    log.info(f"All edges of type '{edge_type}' have been created.")
+                    break
+                if len(missing_edges) > 0:
+                    log.info(f"Found {len(missing_edges)} missing edges of type '{edge_type}'! Creating...")
+                    instructions = self.__generate_edges_instructions(
+                        edge_type=edge_type, arango_edges=missing_edges, merge=False
+                    )
+                    execute_queries(queries=instructions)
+                if len(excessive_edges) > 0:
+                    log.warning(f"Found {len(excessive_edges)} excessive edges of type '{edge_type}'! Deleting...")
+                    instructions = [
+                        (
+                            f"MATCH (src{src_types_str})-[r:{rel_type}]->(dst{dst_types_str}) WHERE r._id = $_id DELETE r",
+                            {'_id': edge[c.ARANGO_EDGE_ID_PROP]}
                         )
-                        execute_queries(queries=instructions)
-                    if len(excessive_edges) > 0:
-                        log.warning(f"Found {len(excessive_edges)} excessive edges of type '{edge_type}'! Deleting...")
-                        instructions = [
-                            (
-                                f"MATCH (src{src_types_str})-[r:{rel_type}]->(dst{dst_types_str}) WHERE r._id = $_id DELETE r",
-                                {'_id': edge[c.ARANGO_EDGE_ID_PROP]}
-                            )
-                            for edge in excessive_edges
-                        ]
-                        execute_queries(queries=instructions)
+                        for edge in excessive_edges
+                    ]
+                    execute_queries(queries=instructions)
 
     @abstractmethod
     def _arango_node_transformer(self, arango_node: dict, node_type: str) -> dict:
