@@ -1,7 +1,5 @@
 import re
-import os
-
-from tqdm import tqdm
+from typing import Optional, List
 
 from arango_to_neo4j import ArangoToNeo4j, get_neo4j_driver
 import bron_node_transformers
@@ -9,7 +7,6 @@ import bron_edge_transformers
 import bron_node_summaries
 
 import constants as c
-from utils import write_file
 
 
 def get_summary_of_node(node_data: dict, node_type: str) -> str:
@@ -67,7 +64,7 @@ class BronArangoToNeo4j(ArangoToNeo4j):
             r'(?<!^)(?=[A-Z])', ' ', edge_type).split()
         return rel_type, [src_layer.lower()], [dst_layer.lower()]
 
-    def build_neo4j(self, ignore_files: list[str] = None) -> None:
+    def build_neo4j(self, ignore_files: Optional[List[str]] = None) -> None:
         super().build_neo4j(ignore_files=ignore_files)
         with get_neo4j_driver() as driver:
             driver.verify_connectivity()
@@ -86,8 +83,8 @@ class BronArangoToNeo4j(ArangoToNeo4j):
 if __name__ == '__main__':
     generator = BronArangoToNeo4j()
     generator.load_graph(from_file=True, rewrite_file=False)
-    generator.generate_instructions(load_if_exists=True)
-    generator.build_neo4j()
+    # generator.generate_instructions(load_if_exists=True)
+    # generator.build_neo4j()
     generator.validate_build_successful()
     from bron_edge_transformers import EdgeData
     edge_data = EdgeData()
