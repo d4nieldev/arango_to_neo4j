@@ -4,10 +4,10 @@ from abc import ABC, abstractmethod
 from threading import Lock
 import json
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Optional
+from typing import Any, Optional, List
 
 from dotenv import load_dotenv
-from arango import ArangoClient
+from arango.client import ArangoClient
 from arango.graph import Graph as ArangoGraph
 from neo4j import GraphDatabase, Driver as Neo4jDriver
 
@@ -26,11 +26,14 @@ def get_arango_graph() -> ArangoGraph:
     Connects to the arango host and database, and retrieves the graph
     :return: The arango graph object representing the wanted graph
     """
-    arango_host = os.getenv(c.ARANGO_HOST)
-    db_name = os.getenv(c.ARANGO_DB_NAME)
-    db_username = os.getenv(c.ARANGO_USERNAME)
-    db_password = os.getenv(c.ARANGO_PASSWORD)
-    db_graph_name = os.getenv(c.ARANGO_GRAPH_NAME)
+    try:
+        arango_host = os.environ[c.ARANGO_HOST]
+        db_name = os.environ[c.ARANGO_DB_NAME]
+        db_username = os.environ[c.ARANGO_USERNAME]
+        db_password = os.environ[c.ARANGO_PASSWORD]
+        db_graph_name = os.environ[c.ARANGO_GRAPH_NAME]
+    except KeyError as e:
+        raise EnvironmentError(f"Missing environment variable: {e}")
 
     arango_client = ArangoClient(hosts=arango_host)
     db = arango_client.db(name=db_name, username=db_username, password=db_password)
@@ -64,8 +67,11 @@ def make_primitives(obj: dict[str, Any]) -> dict[str, str | int | float | None |
 
 
 def get_neo4j_driver() -> Neo4jDriver:
-    neo4j_uri = os.getenv(c.NEO4J_HOST)
-    neo4j_auth = (os.getenv(c.NEO4J_BRON_USERNAME), os.getenv(c.NEO4J_BRON_PASSWORD))
+    try:
+        neo4j_uri = os.environ[c.NEO4J_HOST]
+        neo4j_auth = (os.environ[c.NEO4J_BRON_USERNAME], os.environ[c.NEO4J_BRON_PASSWORD])
+    except KeyError as e:
+        raise EnvironmentError(f"Missing environment variable: {e}")
 
     return GraphDatabase.driver(neo4j_uri, auth=neo4j_auth)
 
@@ -311,6 +317,7 @@ class ArangoToNeo4j(ABC):
                     excessive_nodes = [arango_id_to_node[node_id] for node_id in set(neo4j_ids - arango_ids)]
                     if len(missing_nodes) == len(excessive_nodes) == 0:
                         log.info(f"All nodes of type '{node_type}' have been created.")
+                        break
                     if len(missing_nodes) > 0:
                         log.warning(f"Found {len(missing_nodes)} missing nodes of type '{node_type}'. Adding...")
                         instructions = self.generate_nodes_instructions(node_type=node_type, arango_nodes=missing_nodes, merge=False)
@@ -339,6 +346,7 @@ class ArangoToNeo4j(ABC):
                     excessive_edges = [arango_id_to_edge[edge_id] for edge_id in set(neo4j_ids - arango_ids)]
                     if len(missing_edges) == len(excessive_edges) == 0:
                         log.info(f"All edges of type '{edge_type}' have been created.")
+                        break
                     if len(missing_edges) > 0:
                         log.info(f"Found {len(missing_edges)} missing edges of type '{edge_type}'! Creating...")
                         instructions = self.generate_edges_instructions(edge_type=edge_type, arango_edges=missing_edges, merge=False)
@@ -354,7 +362,7 @@ class ArangoToNeo4j(ABC):
                         ]
                         execute_queries(queries=instructions)
 
-    def build_neo4j(self, ignore_files: list[str] = None) -> None:
+    def build_neo4j(self, ignore_files: Optional[List[str]] = None) -> None:
         """
         Build the Neo4j graph from the nodes and edges instructions files (.cypher)
         """
@@ -364,7 +372,7 @@ class ArangoToNeo4j(ABC):
         for directory in [nodes_dir, edges_dir]:
             for filename in os.listdir(directory):
                 file_path = os.path.join(directory, filename)
-                if ignore_files and file_path in ignore_files:
+                if ignore_files and file_path in ignore_files:p
                     log.info(f"Ignoring file '{file_path}'")
                     continue
                 instructions = read_file(file_path=file_path, is_json=True)
