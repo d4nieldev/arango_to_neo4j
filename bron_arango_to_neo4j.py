@@ -68,8 +68,8 @@ class BronArangoToNeo4j(ArangoToNeo4j):
         return rel_type, [src_layer.lower()], [dst_layer.lower()]
 
     @override
-    def build_neo4j(self, ignore_files: Optional[List[str]] = None) -> None:
-        super().build_neo4j(ignore_files=ignore_files)
+    def build_neo4j_from_instructions(self, ignore_files: Optional[List[str]] = None) -> None:
+        super().build_neo4j_from_instructions(ignore_files=ignore_files)
         with get_neo4j_driver() as driver:
             driver.verify_connectivity()
 
@@ -92,6 +92,7 @@ if __name__ == '__main__':
     generator.validate_build_successful()
     from bron_edge_transformers import EdgeData
     edge_data = EdgeData()
-    print({t: edge_data.found[t] / edge_data.total[t] for t in edge_data.found})
+    print({t: edge_data.found[t] / edge_data.total[t]
+          for t in edge_data.found})
     pass
     # generator.add_embeddings()
