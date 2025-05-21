@@ -163,7 +163,10 @@ def CweCve_trans(edge: dict) -> dict:
             log.warning(f"Could not fine CWE {cwe_id} in CWE API")
         else:
             # successfully fetched CWE data
-            related_cves = resp.json()['Weaknesses'][0].get('ObservedExamples', [])
+            weakness_json = resp.json()['Weaknesses'][0]
+            if weakness_json['MappingNotes']['Usage'] != 'Allowed':
+                log.warning(f"Mapping notes for CWE {cwe_id} is {weakness_json['MappingNotes']['Usage'].lower()}")
+            related_cves = weakness_json.get('ObservedExamples', [])
             for cve_ref in related_cves:
                 cwe_cve_dict[cwe_id][cve_ref['Reference']] = cve_ref['Description']
 
