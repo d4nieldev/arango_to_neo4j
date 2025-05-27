@@ -65,6 +65,8 @@ class BronArangoToNeo4j(ArangoToNeo4j):
         rel_type = self.__edge_type_to_rel_type[edge_type]
         src_layer, dst_layer = re.sub(
             r'(?<!^)(?=[A-Z])', ' ', edge_type).split()
+        if src_layer == 'D3fend_mitigation' and dst_layer == 'Technique':
+            src_layer, dst_layer = dst_layer, src_layer
         return rel_type, [src_layer.lower()], [dst_layer.lower()]
 
     @override
@@ -87,12 +89,6 @@ class BronArangoToNeo4j(ArangoToNeo4j):
 if __name__ == '__main__':
     generator = BronArangoToNeo4j()
     generator.load_graph(from_file=True, rewrite_file=False)
-    # generator.generate_instructions(load_if_exists=True)
-    # generator.build_neo4j()
-    generator.validate_build_successful()
-    from bron_edge_transformers import EdgeData
-    edge_data = EdgeData()
-    print({t: edge_data.found[t] / edge_data.total[t]
-          for t in edge_data.found})
-    pass
-    # generator.add_embeddings()
+    generator.generate_instructions(load_if_exists=True)
+    generator.build_neo4j_from_instructions()
+    generator.verify_build_successful()

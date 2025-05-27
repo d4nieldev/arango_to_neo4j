@@ -158,14 +158,16 @@ def CweCve_trans(edge: dict) -> dict:
 
     if cwe_id not in cwe_cve_dict:
         cwe_cve_dict[cwe_id] = {}
-        resp = requests.get(f"https://cwe-api.mitre.org/api/v1/cwe/weakness/{cwe_id.split('-')[1]}")
+        resp = requests.get(f"https://cwe-api.mitre.org/api/v1/cwe/weakness/{cwe_id.split('-')[1]}", verify=False)
         if resp.status_code == 404:
             log.warning(f"Could not fine CWE {cwe_id} in CWE API")
+            return {}
         else:
             # successfully fetched CWE data
             weakness_json = resp.json()['Weaknesses'][0]
             if weakness_json['MappingNotes']['Usage'] != 'Allowed':
                 log.warning(f"Mapping notes for CWE {cwe_id} is {weakness_json['MappingNotes']['Usage'].lower()}")
+                return {}
             related_cves = weakness_json.get('ObservedExamples', [])
             for cve_ref in related_cves:
                 cwe_cve_dict[cwe_id][cve_ref['Reference']] = cve_ref['Description']
@@ -174,8 +176,7 @@ def CweCve_trans(edge: dict) -> dict:
         edge_data.found['cwe_cve'] = edge_data.found.get('cwe_cve', 0) + 1
         return {'description': cwe_cve_dict[cwe_id][cve_id]}
     elif cwe_cve_dict[cwe_id] and cve_id not in cwe_cve_dict[cwe_id]:
-        log.debug(
-            f"Connection between CWE {cwe_id} and CVE {cve_id} not found in CWE API")
+        log.debug(f"Connection between CWE {cwe_id} and CVE {cve_id} not found in CWE API")
 
     return {}
 
