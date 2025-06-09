@@ -141,7 +141,7 @@ class ArangoToNeo4j(ABC):
             count += len(edges)
         return count
 
-    def load_graph(self, from_file: bool = True, rewrite_file: bool = False) -> None:
+    def load_arango_graph(self, from_file: bool = True, rewrite_file: bool = False) -> None:
         """
         Loads the arango graph into memory
         :param from_file: whether to load from existing file (self.graph_file_path)

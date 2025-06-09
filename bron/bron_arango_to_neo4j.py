@@ -2,9 +2,7 @@ import re
 from typing import Optional, List, override
 
 from arango_to_neo4j import ArangoToNeo4j, get_neo4j_driver
-import bron_node_transformers
-import bron_edge_transformers
-import bron_node_summaries
+from bron import bron_node_transformers, bron_edge_transformers, bron_node_summaries
 
 import constants as c
 
@@ -88,7 +86,7 @@ class BronArangoToNeo4j(ArangoToNeo4j):
 
 if __name__ == '__main__':
     generator = BronArangoToNeo4j()
-    generator.load_graph(from_file=True, rewrite_file=False)
+    generator.load_arango_graph(from_file=True, rewrite_file=False)
     generator.generate_instructions(load_if_exists=True)
     generator.build_neo4j_from_instructions()
     generator.verify_build_successful()
