@@ -6,7 +6,7 @@ This mini-project transfers graph databases written in [arango](https://arangodb
 
 To implement your own transformer you should create a class that extends [ArangoToNeo4j](arango_to_neo4j.py) and implement the methods `_arango_node_transformer()`, `_arango_edge_transformer()`, `_arango_edge_type_info()`
 
-As an example, look at [BronArangoNeo4j](bron/bron_arango_to_neo4j.py) that transfers the [bron grpah](https://github.com/ALFA-group/BRON/tree/master) to a neo4j version of it, along with some data enrichment.
+As an example, look at [BronArangoNeo4j](bron/bron_arango_to_neo4j.py) that transfers the [bron graph](https://github.com/ALFA-group/BRON/tree/master) to a neo4j version of it, along with some data enrichment.
 
 ## Usage
 
